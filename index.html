@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>World's Tallest Buildings Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p/4HhoPQB6ijW46Cpogj+1enhp4PWEf1M/5mTOttOPQ=" crossorigin="" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100vh; }
@@ -13,21 +13,8 @@
 <body>
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j7k3L33a2If+Jc1rtrSC/LkB9Hf4Qy06PkCXY6A=" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script>
-    var buildings = [
-      { rank: 1, name: "Burj Khalifa", city: "Dubai", country: "United Arab Emirates", heightM: 828, completed: 2010, lat: 25.197197, lon: 55.274376 },
-      { rank: 2, name: "Merdeka 118", city: "Kuala Lumpur", country: "Malaysia", heightM: 678.9, completed: 2023, lat: 3.1347, lon: 101.6869 },
-      { rank: 3, name: "Shanghai Tower", city: "Shanghai", country: "China", heightM: 632, completed: 2015, lat: 31.2351, lon: 121.5015 },
-      { rank: 4, name: "Abraj Al-Bait Clock Tower", city: "Mecca", country: "Saudi Arabia", heightM: 601, completed: 2012, lat: 21.4187, lon: 39.8257 },
-      { rank: 5, name: "Ping An Finance Center", city: "Shenzhen", country: "China", heightM: 599, completed: 2017, lat: 22.5333, lon: 114.0628 },
-      { rank: 6, name: "Lotte World Tower", city: "Seoul", country: "South Korea", heightM: 555, completed: 2017, lat: 37.5126, lon: 127.1026 },
-      { rank: 7, name: "One World Trade Center", city: "New York City", country: "United States", heightM: 541.3, completed: 2014, lat: 40.7127, lon: -74.0134 },
-      { rank: 8, name: "Guangzhou CTF Finance Centre", city: "Guangzhou", country: "China", heightM: 530, completed: 2016, lat: 23.1176, lon: 113.3232 },
-      { rank: 9, name: "Tianjin CTF Finance Centre", city: "Tianjin", country: "China", heightM: 530, completed: 2019, lat: 39.104, lon: 117.258 },
-      { rank: 10, name: "CITIC Tower", city: "Beijing", country: "China", heightM: 528, completed: 2018, lat: 39.9091, lon: 116.4544 }
-    ];
-
     var map = L.map('map').setView([20, 0], 2);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -35,12 +22,8 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    buildings.forEach(function (b) {
-      var popup = '<b>#' + b.rank + ' ' + b.name + '</b><br/>' +
-                  b.city + ', ' + b.country + '<br/>' +
-                  b.heightM + ' m, completed ' + b.completed;
-      L.marker([b.lat, b.lon]).addTo(map).bindPopup(popup);
-    });
+    var popup = '<b>#1 Burj Khalifa</b><br/>Dubai, United Arab Emirates<br/>828 m, completed 2010';
+    L.marker([25.197197, 55.274376]).addTo(map).bindPopup(popup);
   </script>
 </body>
 </html>
