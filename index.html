@@ -2,13 +2,320 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>tallest-buildings-map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World's Tallest Buildings Map</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <main>
-    <h1>tallest-buildings-map</h1>
-    <p>GitHub Pages placeholder. Add the map app code to this repository to ship the full dashboard.</p>
-  </main>
+<body class="bg-slate-50">
+  <div id="root"></div>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    function clamp(v, a, b) {
+      return Math.max(a, Math.min(b, v));
+    }
+
+    const TILE_SIZE = 256;
+    const Z = 2;
+    const WORLD = TILE_SIZE * Math.pow(2, Z);
+
+    function project(lat, lon) {
+      const clampedLat = clamp(lat, -85, 85);
+      const x = ((lon + 180) / 360) * WORLD;
+      const rad = (clampedLat * Math.PI) / 180;
+      const y = ((1 - Math.log(Math.tan(rad / 2 + Math.PI / 4)) / Math.PI) / 2) * WORLD;
+      return { x, y };
+    }
+
+    function cx() {
+      return Array.prototype.slice.call(arguments).filter(Boolean).join(" ");
+    }
+
+    const DATA = [
+      { rank: 1, name: "Burj Khalifa", city: "Dubai", country: "United Arab Emirates", heightM: 828, completed: 2010, lat: 25.2048, lon: 55.2708 },
+      { rank: 2, name: "Merdeka 118", city: "Kuala Lumpur", country: "Malaysia", heightM: 678.9, completed: 2023, lat: 3.139, lon: 101.6869 },
+      { rank: 3, name: "Shanghai Tower", city: "Shanghai", country: "China", heightM: 632, completed: 2015, lat: 31.2304, lon: 121.4737 },
+      { rank: 4, name: "Abraj Al-Bait Clock Tower", city: "Mecca", country: "Saudi Arabia", heightM: 601, completed: 2012, lat: 21.3891, lon: 39.8579 },
+      { rank: 5, name: "Ping An Finance Center", city: "Shenzhen", country: "China", heightM: 599, completed: 2017, lat: 22.5431, lon: 114.0579 },
+      { rank: 6, name: "Lotte World Tower", city: "Seoul", country: "South Korea", heightM: 555, completed: 2017, lat: 37.5665, lon: 126.978 },
+      { rank: 7, name: "One World Trade Center", city: "New York City", country: "United States", heightM: 541.3, completed: 2014, lat: 40.7128, lon: -74.006 },
+      { rank: 8, name: "Guangzhou CTF Finance Centre", city: "Guangzhou", country: "China", heightM: 530, completed: 2016, lat: 23.1291, lon: 113.2644 },
+      { rank: 9, name: "Tianjin CTF Finance Centre", city: "Tianjin", country: "China", heightM: 530, completed: 2019, lat: 39.3434, lon: 117.3616 },
+      { rank: 10, name: "CITIC Tower", city: "Beijing", country: "China", heightM: 528, completed: 2018, lat: 39.9042, lon: 116.4074 },
+    ];
+
+    function groupByCity(rows) {
+      const map = new Map();
+      rows.forEach(function (r) {
+        const key = r.city + ", " + r.country;
+        if (!map.has(key)) {
+          map.set(key, { location: key, city: r.city, country: r.country, lat: r.lat, lon: r.lon, buildings: [], count: 0, top: r });
+        }
+        const g = map.get(key);
+        g.buildings.push(r);
+        g.count += 1;
+        if ((r.heightM || 0) > (g.top.heightM || 0)) g.top = r;
+      });
+
+      map.forEach(function (g) {
+        const p = project(g.lat, g.lon);
+        g.x = p.x;
+        g.y = p.y;
+        g.buildings.sort(function (a, b) {
+          return (b.heightM || 0) - (a.heightM || 0);
+        });
+      });
+
+      return Array.from(map.values()).sort(function (a, b) {
+        return (b.top.heightM || 0) - (a.top.heightM || 0);
+      });
+    }
+
+    function escapeCsv(v) {
+      const s = String(v == null ? "" : v);
+      if (/[",\n]/.test(s)) {
+        return "\"" + s.replace(/"/g, "\"\"") + "\"";
+      }
+      return s;
+    }
+
+    function toCsv(rows) {
+      const head = ["rank", "name", "city", "country", "heightM", "completed", "latitude", "longitude"];
+      const lines = [head.map(escapeCsv).join(",")];
+      rows.forEach(function (r) {
+        lines.push([
+          r.rank,
+          r.name,
+          r.city,
+          r.country,
+          r.heightM,
+          r.completed,
+          r.lat,
+          r.lon,
+        ].map(escapeCsv).join(","));
+      });
+      return lines.join("\n");
+    }
+
+    function downloadCsv(rows) {
+      const csv = toCsv(rows);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tallest-buildings.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function App() {
+      const [query, setQuery] = useState("");
+      const [selected, setSelected] = useState("Dubai, United Arab Emirates");
+
+      const rows = useMemo(function () {
+        const q = query.trim().toLowerCase();
+        if (!q) return DATA;
+        return DATA.filter(function (r) {
+          const hay = (r.name + " " + r.city + " " + r.country).toLowerCase();
+          return hay.includes(q);
+        });
+      }, [query]);
+
+      const grouped = useMemo(function () {
+        return groupByCity(rows);
+      }, [rows]);
+
+      const selectedGroup = grouped.find(function (g) {
+        return g.location === selected;
+      }) || grouped[0];
+
+      const tileIndices = [0, 1, 2, 3];
+
+      return (
+        <div className="min-h-screen text-slate-900">
+          <header className="bg-slate-950 text-white">
+            <div className="mx-auto max-w-6xl px-4 py-5 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-xl font-semibold tracking-tight">World&apos;s Tallest Buildings Map</h1>
+                  <p className="text-sm text-slate-300">
+                    OpenStreetMap tiles, Web Mercator projection, and city clusters. Type to filter. Click a marker or a row to select a city.
+                  </p>
+                </div>
+                <button
+                  className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-950 shadow-sm hover:bg-white"
+                  onClick={function () {
+                    downloadCsv(rows);
+                  }}
+                  title="Download filtered CSV"
+                >
+                  Download CSV
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  value={query}
+                  onChange={function (e) {
+                    setQuery(e.target.value);
+                  }}
+                  className="flex-1 min-w-[220px] rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500"
+                  placeholder="Search (building, city, country)…"
+                />
+                <div className="text-sm text-slate-400">
+                  {rows.length} building{rows.length === 1 ? "" : "s"} in {grouped.length} city group{grouped.length === 1 ? "" : "s"}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 gap-6 md:grid-cols-5">
+            <section className="md:col-span-3 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                <h2 className="text-sm font-medium">Map</h2>
+                <div className="text-xs text-slate-500">OSM tiles | zoom 2</div>
+              </div>
+
+              <div className="relative h-[420px] overflow-hidden bg-slate-100">
+                <div className="relative w-full h-full">
+                  <div className="absolute inset-0 mx-auto" style={{ width: WORLD, height: WORLD }}>
+                    {tileIndices.flatMap(function (x) {
+                      return tileIndices.map(function (y) {
+                        const left = x * TILE_SIZE;
+                        const top = y * TILE_SIZE;
+                        const style = {
+                          left: left,
+                          top: top,
+                          width: TILE_SIZE,
+                          height: TILE_SIZE,
+                          backgroundImage: 'url(https://tile.openstreetmap.org/' + Z + '/' + x + '/' + y + '.png)',
+                          backgroundSize: 'cover'
+                        };
+                        return (
+                          <div key={x + '-' + y} className="absolute" style={style} aria-hidden="true" />
+                        );
+                      });
+                    })}
+
+                    {grouped.map(function (g) {
+                      const isSelected = selectedGroup && selectedGroup.location === g.location;
+                      const size = Math.min(44, 20 + g.count * 5);
+                      const left = g.x - size / 2;
+                      const top = g.y - size / 2;
+                      const style = { left: left, top: top, width: size, height: size };
+                      const title = g.location + ' • ' + g.count + ' building' + (g.count === 1 ? '' : 's') + ' • tallest ' + g.top.heightM + ' m';
+                      const classes = cx(
+                        'absolute flex items-center justify-center rounded-full border text-xs font-medium shadow-sm transition',
+                        isSelected && 'bg-sky-500 border-sky-600 text-white',
+                        !isSelected && 'bg-white border-slate-300 text-slate-900 hover:bg-slate-100'
+                      );
+                      return (
+                        <button key={g.location} className={classes} style={style} onClick={function () { setSelected(g.location); }} title={title}>
+                          {g.count}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <aside className="md:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="p-4 border-b border-slate-200">
+                <h2 className="text-sm font-medium mb-1">Selected city</h2>
+                {selectedGroup ? (
+                  <>
+                    <div className="text-sm font-semibold text-slate-950">{selectedGroup.location}</div>
+                    <div className="text-xs text-slate-500">
+                      {selectedGroup.count} building{selectedGroup.count === 1 ? '' : 's'} mapped • tallest {selectedGroup.top.heightM} m
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-slate-500">No selection in filtered results.</div>
+                )}
+              </div>
+
+              <div className="p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Buildings</h3>
+                <div className="space-y-2">
+                  {selectedGroup && selectedGroup.buildings.map(function (b) {
+                    return (
+                      <div key={b.rank} className="rounded-lg border border-slate-200 bg-slate-50 p-3 hover:border-slate-300">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-medium text-slate-900">{b.name}</div>
+                          <div className="text-xs text-slate-500">#{b.rank}</div>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                          <div>{b.heightM} m</div>
+                          <div>{b.completed}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {!selectedGroup && <div className="text-xs text-slate-500">No buildings.</div>}
+                </div>
+              </div>
+            </aside>
+
+            <section className="md:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                <h2 className="text-sm font-medium">Table</h2>
+                <div className="text-xs text-slate-500">Click a row to select its city</div>
+              </div>
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Rank</th>
+                      <th className="px-4 py-3 text-left">Building</th>
+                      <th className="px-4 py-3 text-left">City</th>
+                      <th className="px-4 py-3 text-left">Country</th>
+                      <th className="px-4 py-3 text-left">Height (m)</th>
+                      <th className="px-4 py-3 text-left">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(function (r) {
+                      const isSelected = selectedGroup && (r.city + ', ' + r.country) === selectedGroup.location;
+                      const classes = cx('cursor-pointer border-b border-slate-100 hover:bg-slate-50', isSelected && 'bg-sky-50'););
+                      const title = 'Select ' + r.city + ', ' + r.country;
+                      return (
+                        <tr
+                          key={r.rank}
+                          className={classes}
+                          onClick={function () {
+                            setSelected(r.city + ', ' + r.country);
+                          }}
+                          title={title}
+                        >
+                          <td className="px-4 py-3 text-slate-600">{r.rank}</td>
+                          <td className="px-4 py-3 font-medium text-slate-900">{r.name}</td>
+                          <td className="px-4 py-3 text-slate-700">{r.city}</td>
+                          <td className="px-4 py-3 text-slate-700">{r.country}</td>
+                          <td className="px-4 py-3 text-slate-700">{r.heightM}</td>
+                          <td className="px-4 py-3 text-slate-700">{r.completed}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
 </body>
 </html>
