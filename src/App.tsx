@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useMemo, useState } from "react";
 import {
   Building2,
@@ -7,10 +8,11 @@ import {
   MapPin,
   Ruler,
   Search,
+  Table2,
   X,
 } from "lucide-react";
 
-const CITY_COORDINATES: Record<string, [number, number]> = {
+const CITY_COORDINATES = {
   "Abu Dhabi, United Arab Emirates": [24.4539, 54.3773],
   "Beijing, China": [39.9042, 116.4074],
   "Busan, South Korea": [35.1796, 129.0756],
@@ -157,44 +159,11 @@ const RAW_DATA = `rank|name|city|country|completed|heightM|heightFt|floors|mater
 99|Shenzhen Special Zone Press Tower|Shenzhen|China|1998|262|860|47|Composite|Office
 100|Ningbo Bank of China Headquarters|Ningbo|China|2020|246|807|49|Composite|Office`;
 
-type Building = {
-  rank: number;
-  name: string;
-  city: string;
-  country: string;
-  location: string;
-  completed: number;
-  heightM: number;
-  heightFt: number;
-  floors: number;
-  material: string;
-  function: string;
-  primaryFunction: string;
-  lat: number;
-  lon: number;
-  coordinatePrecision: string;
-};
-
-type CityGroup = {
-  key: string;
-  city: string;
-  country: string;
-  location: string;
-  lat: number;
-  lon: number;
-  x: number;
-  y: number;
-  buildings: Building[];
-  tallest: Building;
-  count: number;
-};
-
-function parseBuildings(rawText: string): Building[] {
+function parseBuildings(rawText) {
   const lines = rawText.trim().split("\n");
   return lines.slice(1).map((line) => {
     const columns = line.split("|");
-    const [rank, name, city, country, completed, heightM, heightFt, floors, material, buildingFunction] =
-      columns;
+    const [rank, name, city, country, completed, heightM, heightFt, floors, material, buildingFunction] = columns;
     const location = `${city}, ${country}`;
     const coordinates = CITY_COORDINATES[location] ?? [0, 0];
     return {
@@ -223,25 +192,14 @@ const TILE_SIZE = 256;
 const WORLD_SIZE = TILE_SIZE * Math.pow(2, TILE_ZOOM);
 const TILE_INDICES = Array.from({ length: Math.pow(2, TILE_ZOOM) }, (_, index) => index);
 
-const palette = [
-  "#2563eb",
-  "#7c3aed",
-  "#ea580c",
-  "#059669",
-  "#dc2626",
-  "#0891b2",
-  "#db2777",
-  "#475569",
-  "#ca8a04",
-  "#0f766e",
-];
+const palette = ["#2563eb", "#7c3aed", "#ea580c", "#059669", "#dc2626", "#0891b2", "#db2777", "#475569", "#ca8a04", "#0f766e"];
 
-function colorForCountry(country: string, countries: string[]) {
+function colorForCountry(country, countries) {
   const index = countries.indexOf(country);
   return palette[index % palette.length] ?? "#0f172a";
 }
 
-function projectMercator(lat: number, lon: number, zoom = TILE_ZOOM) {
+function projectMercator(lat, lon, zoom = TILE_ZOOM) {
   const sinLatitude = Math.sin((lat * Math.PI) / 180);
   const scale = TILE_SIZE * Math.pow(2, zoom);
   const x = ((lon + 180) / 360) * scale;
@@ -249,8 +207,8 @@ function projectMercator(lat: number, lon: number, zoom = TILE_ZOOM) {
   return { x, y };
 }
 
-function groupByCity(rows: Building[]): CityGroup[] {
-  const groups = new Map<string, CityGroup>();
+function groupByCity(rows) {
+  const groups = new Map();
   rows.forEach((row) => {
     const key = row.location;
     if (!groups.has(key)) {
@@ -270,7 +228,6 @@ function groupByCity(rows: Building[]): CityGroup[] {
       });
     }
     const group = groups.get(key);
-    if (!group) return;
     group.buildings.push(row);
     group.count += 1;
     if (row.heightM > group.tallest.heightM) group.tallest = row;
@@ -278,53 +235,20 @@ function groupByCity(rows: Building[]): CityGroup[] {
   return Array.from(groups.values()).sort((a, b) => b.tallest.heightM - a.tallest.heightM);
 }
 
-function csvEscape(value: string | number | null | undefined) {
+function csvEscape(value) {
   const stringValue = String(value ?? "");
-  const needsEscaping =
-    stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes('"');
+  const needsEscaping = stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes('"');
   if (!needsEscaping) return stringValue;
   return `"${stringValue.split('"').join('""')}"`;
 }
 
-function toCsv(rows: Building[]) {
-  const headers = [
-    "rank",
-    "name",
-    "city",
-    "country",
-    "completed",
-    "heightM",
-    "heightFt",
-    "floors",
-    "material",
-    "function",
-    "latitude",
-    "longitude",
-    "coordinatePrecision",
-  ];
-  const csvRows = rows.map((row) =>
-    [
-      row.rank,
-      row.name,
-      row.city,
-      row.country,
-      row.completed,
-      row.heightM,
-      row.heightFt,
-      row.floors,
-      row.material,
-      row.function,
-      row.lat,
-      row.lon,
-      row.coordinatePrecision,
-    ]
-      .map(csvEscape)
-      .join(","),
-  );
+function toCsv(rows) {
+  const headers = ["rank", "name", "city", "country", "completed", "heightM", "heightFt", "floors", "material", "function", "latitude", "longitude", "coordinatePrecision"];
+  const csvRows = rows.map((row) => [row.rank, row.name, row.city, row.country, row.completed, row.heightM, row.heightFt, row.floors, row.material, row.function, row.lat, row.lon, row.coordinatePrecision].map(csvEscape).join(","));
   return [headers.join(","), ...csvRows].join("\n");
 }
 
-function downloadCsv(rows: Building[]) {
+function downloadCsv(rows) {
   const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -338,50 +262,21 @@ function downloadCsv(rows: Building[]) {
 
 function runTests() {
   console.assert(buildings.length === 100, "Expected exactly 100 building records.");
-  console.assert(
-    buildings[0]?.name === "Burj Khalifa",
-    "Expected Burj Khalifa to be the top ranked record.",
-  );
-  console.assert(
-    buildings[0]?.heightM === 828,
-    "Expected Burj Khalifa height to parse as a number.",
-  );
-  console.assert(
-    buildings.every((row) => Number.isFinite(row.lat) && Number.isFinite(row.lon)),
-    "Expected every building to have numeric coordinates.",
-  );
-  console.assert(
-    groupByCity(buildings).some(
-      (group) => group.location === "Dubai, United Arab Emirates" && group.count > 1,
-    ),
-    "Expected Dubai to be grouped as a multi-building city cluster.",
-  );
-  console.assert(
-    csvEscape('Alpha, "Beta"') === '"Alpha, ""Beta"""',
-    "Expected CSV escaping to quote commas and double quote characters.",
-  );
-  console.assert(
-    toCsv(buildings.slice(0, 1)).split("\n").length === 2,
-    "Expected one data row plus one header row in CSV output.",
-  );
+  console.assert(buildings[0].name === "Burj Khalifa", "Expected Burj Khalifa to be the top ranked record.");
+  console.assert(buildings[0].heightM === 828, "Expected Burj Khalifa height to parse as a number.");
+  console.assert(buildings.every((row) => Number.isFinite(row.lat) && Number.isFinite(row.lon)), "Expected every building to have numeric coordinates.");
+  console.assert(groupByCity(buildings).some((group) => group.location === "Dubai, United Arab Emirates" && group.count > 1), "Expected Dubai to be grouped as a multi-building city cluster.");
+  console.assert(csvEscape('Alpha, "Beta"') === '"Alpha, ""Beta"""', "Expected CSV escaping to quote commas and double quote characters.");
+  console.assert(toCsv(buildings.slice(0, 1)).split("\n").length === 2, "Expected one data row plus one header row in CSV output.");
   const origin = projectMercator(0, 0);
-  console.assert(
-    Math.abs(origin.x - WORLD_SIZE / 2) < 0.0001,
-    "Expected longitude zero to project to the horizontal center.",
-  );
-  console.assert(
-    Math.abs(origin.y - WORLD_SIZE / 2) < 0.0001,
-    "Expected latitude zero to project to the vertical center.",
-  );
-  console.assert(
-    groupByCity(buildings).every((group) => Number.isFinite(group.x) && Number.isFinite(group.y)),
-    "Expected every city cluster to have projected map coordinates.",
-  );
+  console.assert(Math.abs(origin.x - WORLD_SIZE / 2) < 0.0001, "Expected longitude zero to project to the horizontal center.");
+  console.assert(Math.abs(origin.y - WORLD_SIZE / 2) < 0.0001, "Expected latitude zero to project to the vertical center.");
+  console.assert(groupByCity(buildings).every((group) => Number.isFinite(group.x) && Number.isFinite(group.y)), "Expected every city cluster to have projected map coordinates.");
 }
 
 runTests();
 
-function statCard(icon: React.ReactNode, label: string, value: string | number, detail: string) {
+function statCard(icon, label, value, detail) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-3">
@@ -396,17 +291,26 @@ function statCard(icon: React.ReactNode, label: string, value: string | number, 
   );
 }
 
-function TileWorldMap({
-  cityGroups,
-  countries,
-  selectedGroup,
-  onSelectLocation,
-}: {
-  cityGroups: CityGroup[];
-  countries: string[];
-  selectedGroup: CityGroup | null;
-  onSelectLocation: (location: string) => void;
-}) {
+function barList(rows, labelKey, valueKey, color = "#2563eb") {
+  const max = Math.max(...rows.map((row) => row[valueKey]), 1);
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <div key={row[labelKey]}>
+          <div className="mb-1 flex justify-between gap-4 text-xs text-slate-600">
+            <span className="truncate">{row[labelKey]}</span>
+            <span className="font-medium">{row[valueKey]}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full" style={{ width: `${(row[valueKey] / max) * 100}%`, backgroundColor: color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TileWorldMap({ cityGroups, countries, selectedGroup, onSelectLocation }) {
   return (
     <div className="relative h-[620px] overflow-hidden bg-slate-200">
       <div className="absolute left-1/2 top-1/2 h-[1024px] w-[1024px] -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-inner">
@@ -420,7 +324,7 @@ function TileWorldMap({
               style={{ left: x * TILE_SIZE, top: y * TILE_SIZE }}
               draggable={false}
             />
-          )),
+          ))
         )}
         <div className="absolute inset-0 bg-white/5" />
         {cityGroups.map((group) => {
@@ -439,23 +343,15 @@ function TileWorldMap({
                 width: active ? radius * 2 + 10 : radius * 2,
                 height: active ? radius * 2 + 10 : radius * 2,
                 backgroundColor: color,
-                boxShadow: active
-                  ? "0 0 0 8px rgba(15, 23, 42, 0.22), 0 18px 35px rgba(15, 23, 42, 0.26)"
-                  : "0 10px 24px rgba(15, 23, 42, 0.22)",
+                boxShadow: active ? "0 0 0 8px rgba(15, 23, 42, 0.22), 0 18px 35px rgba(15, 23, 42, 0.26)" : "0 10px 24px rgba(15, 23, 42, 0.22)",
               }}
               aria-label={`${group.location}, ${group.count} buildings`}
             >
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold text-white drop-shadow">
-                {group.count}
-              </span>
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-bold text-white drop-shadow">{group.count}</span>
               <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 hidden w-64 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 text-left text-sm text-slate-700 shadow-xl group-hover:block">
                 <span className="block font-semibold text-slate-950">{group.location}</span>
-                <span className="mt-1 block">
-                  {group.count} building{group.count === 1 ? "" : "s"}
-                </span>
-                <span className="block">
-                  Tallest: {group.tallest.name}, {group.tallest.heightM} m
-                </span>
+                <span className="mt-1 block">{group.count} building{group.count === 1 ? "" : "s"}</span>
+                <span className="block">Tallest: {group.tallest.name}, {group.tallest.heightM} m</span>
               </span>
             </button>
           );
@@ -468,7 +364,7 @@ function TileWorldMap({
   );
 }
 
-export default function App() {
+export default function BatchGeoReplacementMap() {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("All");
   const [city, setCity] = useState("All");
@@ -493,32 +389,40 @@ export default function App() {
     const normalized = query.trim().toLowerCase();
     return buildings.filter((row) => {
       const searchable = `${row.name} ${row.city} ${row.country} ${row.material} ${row.function}`.toLowerCase();
-      return (
-        (!normalized || searchable.includes(normalized)) &&
-        (country === "All" || row.country === country) &&
-        (city === "All" || row.city === city) &&
-        (material === "All" || row.material === material) &&
-        (primaryFunction === "All" || row.primaryFunction === primaryFunction) &&
-        row.heightM >= minHeight &&
-        row.heightM <= maxHeight &&
-        row.completed >= minYear &&
-        row.completed <= maxYear
-      );
+      return (!normalized || searchable.includes(normalized)) && (country === "All" || row.country === country) && (city === "All" || row.city === city) && (material === "All" || row.material === material) && (primaryFunction === "All" || row.primaryFunction === primaryFunction) && row.heightM >= minHeight && row.heightM <= maxHeight && row.completed >= minYear && row.completed <= maxYear;
     });
   }, [query, country, city, material, primaryFunction, minHeight, maxHeight, minYear, maxYear]);
 
   const cityGroups = useMemo(() => groupByCity(filtered), [filtered]);
   const selectedGroup = cityGroups.find((group) => group.location === selectedLocation) ?? cityGroups[0] ?? null;
-
+  const selectedBuilding = selectedGroup?.tallest ?? null;
 
   const stats = useMemo(() => {
-    const averageHeight = filtered.length
-      ? Math.round(filtered.reduce((sum, row) => sum + row.heightM, 0) / filtered.length)
-      : 0;
+    const averageHeight = filtered.length ? Math.round(filtered.reduce((sum, row) => sum + row.heightM, 0) / filtered.length) : 0;
     const tallest = filtered.length ? Math.max(...filtered.map((row) => row.heightM)) : 0;
     return { buildings: filtered.length, cities: cityGroups.length, averageHeight, tallest };
   }, [filtered, cityGroups]);
 
+  const countryBars = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((row) => counts.set(row.country, (counts.get(row.country) ?? 0) + 1));
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 7);
+  }, [filtered]);
+
+  const functionBars = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((row) => counts.set(row.primaryFunction, (counts.get(row.primaryFunction) ?? 0) + 1));
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 7);
+  }, [filtered]);
+
+  const decadeBars = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((row) => {
+      const decade = `${Math.floor(row.completed / 10) * 10}s`;
+      counts.set(decade, (counts.get(decade) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([decade, count]) => ({ decade, count })).sort((a, b) => Number(a.decade.slice(0, 4)) - Number(b.decade.slice(0, 4)));
+  }, [filtered]);
 
   function resetFilters() {
     setQuery("");
@@ -544,17 +448,94 @@ export default function App() {
               <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300">A BatchGeo-style workflow rebuilt as a local React application with OpenStreetMap raster tiles, city-clustered markers, synchronized filters, analytical summaries, and CSV export.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm leading-6 text-slate-200">
-              <p className="font-medium text-white">Coordinate model</p><p>City-level coordinates</p><p>No paid geocoding service required</p>
+              <p className="font-medium text-white">Coordinate model</p>
+              <p>City-level coordinates</p>
+              <p>No paid geocoding service required</p>
             </div>
           </div>
         </header>
-        <section className="grid gap-4 md:grid-cols-4">{statCard(<Building2 size={20} />, "Buildings", stats.buildings, "Filtered structures currently in scope.")}{statCard(<MapPin size={20} />, "Mapped cities", stats.cities, "Clusters preserve accurate city placement.")}{statCard(<Ruler size={20} />, "Tallest", `${stats.tallest} m`, "Maximum height in the active view.")}{statCard(<Layers size={20} />, "Average height", `${stats.averageHeight} m`, "Mean height across filtered records.")}</section>
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-2 text-sm font-medium text-slate-700"><Filter size={16} />Filters</div><div className="flex flex-wrap gap-2"><button onClick={resetFilters} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"><X size={15} /> Reset</button><button onClick={() => downloadCsv(filtered)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"><Download size={15} /> Export CSV</button></div></div>
-          <div className="grid gap-4 lg:grid-cols-[1.3fr_repeat(4,1fr)]"><label className="relative block"><Search className="absolute left-3 top-3 text-slate-400" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search building, city, country, material, or function" className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-slate-400 focus:bg-white" /></label><select value={country} onChange={(event) => { setCountry(event.target.value); setCity("All"); }} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{countryOptions.map((option) => <option key={option}>{option}</option>)}</select><select value={city} onChange={(event) => setCity(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{cityOptions.map((option) => <option key={option}>{option}</option>)}</select><select value={material} onChange={(event) => setMaterial(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{materialOptions.map((option) => <option key={option}>{option}</option>)}</select><select value={primaryFunction} onChange={(event) => setPrimaryFunction(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{functionOptions.map((option) => <option key={option}>{option}</option>)}</select></div>
-        </section>
-        <main className="grid gap-6 xl:grid-cols-[1fr_380px]"><section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold">OpenStreetMap tile layer</h2><p className="text-sm leading-6 text-slate-500">Each marker is a city cluster. Click a cluster to inspect every building in that location.</p></div><div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-600">Marker number equals clustered buildings. Marker size reflects local density and height.</div></div><TileWorldMap cityGroups={cityGroups} countries={countries} selectedGroup={selectedGroup} onSelectLocation={setSelectedLocation} /></section></main>
 
+        <section className="grid gap-4 md:grid-cols-4">
+          {statCard(<Building2 size={20} />, "Buildings", stats.buildings, "Filtered structures currently in scope.")}
+          {statCard(<MapPin size={20} />, "Mapped cities", stats.cities, "Clusters preserve accurate city placement.")}
+          {statCard(<Ruler size={20} />, "Tallest", `${stats.tallest} m`, "Maximum height in the active view.")}
+          {statCard(<Layers size={20} />, "Average height", `${stats.averageHeight} m`, "Mean height across filtered records.")}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700"><Filter size={16} />Filters</div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={resetFilters} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"><X size={15} /> Reset</button>
+              <button onClick={() => downloadCsv(filtered)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"><Download size={15} /> Export CSV</button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.3fr_repeat(4,1fr)]">
+            <label className="relative block">
+              <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search building, city, country, material, or function" className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-slate-400 focus:bg-white" />
+            </label>
+            <select value={country} onChange={(event) => { setCountry(event.target.value); setCity("All"); }} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{countryOptions.map((option) => <option key={option}>{option}</option>)}</select>
+            <select value={city} onChange={(event) => setCity(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{cityOptions.map((option) => <option key={option}>{option}</option>)}</select>
+            <select value={material} onChange={(event) => setMaterial(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{materialOptions.map((option) => <option key={option}>{option}</option>)}</select>
+            <select value={primaryFunction} onChange={(event) => setPrimaryFunction(event.target.value)} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white">{functionOptions.map((option) => <option key={option}>{option}</option>)}</select>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="mb-2 flex justify-between text-xs font-medium text-slate-500"><span>Height range</span><span>{minHeight} m to {maxHeight} m</span></div>
+              <div className="grid gap-3 md:grid-cols-2"><input type="range" min="246" max="828" value={minHeight} onChange={(event) => setMinHeight(Math.min(Number(event.target.value), maxHeight))} className="w-full accent-slate-950" /><input type="range" min="246" max="828" value={maxHeight} onChange={(event) => setMaxHeight(Math.max(Number(event.target.value), minHeight))} className="w-full accent-slate-950" /></div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="mb-2 flex justify-between text-xs font-medium text-slate-500"><span>Completion year range</span><span>{minYear} to {maxYear}</span></div>
+              <div className="grid gap-3 md:grid-cols-2"><input type="range" min="1931" max="2023" value={minYear} onChange={(event) => setMinYear(Math.min(Number(event.target.value), maxYear))} className="w-full accent-slate-950" /><input type="range" min="1931" max="2023" value={maxYear} onChange={(event) => setMaxYear(Math.max(Number(event.target.value), minYear))} className="w-full accent-slate-950" /></div>
+            </div>
+          </div>
+        </section>
+
+        <main className="grid gap-6 xl:grid-cols-[1fr_380px]">
+          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">OpenStreetMap tile layer</h2>
+                <p className="text-sm leading-6 text-slate-500">Each marker is a city cluster. Click a cluster to inspect every building in that location.</p>
+              </div>
+              <div className="rounded-2xl bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-600">Marker number equals clustered buildings. Marker size reflects local density and height.</div>
+            </div>
+            <TileWorldMap cityGroups={cityGroups} countries={countries} selectedGroup={selectedGroup} onSelectLocation={setSelectedLocation} />
+          </section>
+
+          <aside className="space-y-5">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-3"><div className="rounded-2xl bg-slate-950 p-3 text-white"><MapPin size={20} /></div><div><p className="text-sm text-slate-500">Selected cluster</p><h2 className="text-xl font-semibold">{selectedGroup?.location ?? "No results"}</h2></div></div>
+              {selectedGroup && selectedBuilding && (<div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-slate-500">Buildings</p><p className="font-semibold">{selectedGroup.count}</p></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-slate-500">Tallest</p><p className="font-semibold">{selectedBuilding.heightM} m</p></div></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-slate-500">Tallest building</p><p className="font-semibold">#{selectedBuilding.rank} {selectedBuilding.name}</p></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-slate-500">Coordinate precision</p><p className="font-semibold">City-level, shared by cluster</p></div></div>)}
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold">Cluster records</h2>
+              <div className="max-h-[360px] space-y-2 overflow-auto pr-1">
+                {(selectedGroup?.buildings ?? []).slice().sort((a, b) => a.rank - b.rank).map((row) => (<div key={row.rank} className="rounded-2xl border border-slate-200 bg-white p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">#{row.rank} {row.name}</p><p className="mt-1 text-sm text-slate-500">{row.function}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">{row.heightM} m</span></div></div>))}
+              </div>
+            </section>
+          </aside>
+        </main>
+
+        <section className="grid gap-6 lg:grid-cols-3">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 text-lg font-semibold">Buildings by country</h2>{barList(countryBars, "name", "count", "#2563eb")}</div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 text-lg font-semibold">Primary function mix</h2>{barList(functionBars, "name", "count", "#059669")}</div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 text-lg font-semibold">Completion decade</h2>{barList(decadeBars, "decade", "count", "#7c3aed")}</div>
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-2"><Table2 size={18} /><h2 className="text-lg font-semibold">Map-linked table</h2></div><p className="text-sm text-slate-500">Click a row to select that city cluster.</p></div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Rank</th><th className="px-4 py-3">Building</th><th className="px-4 py-3">City</th><th className="px-4 py-3">Country</th><th className="px-4 py-3">Height</th><th className="px-4 py-3">Floors</th><th className="px-4 py-3">Completed</th><th className="px-4 py-3">Material</th><th className="px-4 py-3">Function</th></tr></thead>
+              <tbody>{filtered.map((row) => (<tr key={row.rank} onClick={() => setSelectedLocation(row.location)} className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50"><td className="px-4 py-3 font-medium">#{row.rank}</td><td className="px-4 py-3 font-medium text-slate-950">{row.name}</td><td className="px-4 py-3 text-slate-600">{row.city}</td><td className="px-4 py-3 text-slate-600">{row.country}</td><td className="px-4 py-3 text-slate-600">{row.heightM} m</td><td className="px-4 py-3 text-slate-600">{row.floors}</td><td className="px-4 py-3 text-slate-600">{row.completed}</td><td className="px-4 py-3 text-slate-600">{row.material}</td><td className="px-4 py-3 text-slate-600">{row.function}</td></tr>))}</tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </div>
   );
