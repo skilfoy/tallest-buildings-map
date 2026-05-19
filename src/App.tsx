@@ -252,11 +252,14 @@ function downloadCsv(rows) {
   const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  const filename = "filtered-tallest-buildings-map.csv";
+
   link.href = url;
-  link.download = "filtered-tallest-buildings-map.csv";
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
   URL.revokeObjectURL(url);
 }
 
