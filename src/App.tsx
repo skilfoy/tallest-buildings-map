@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { useMemo, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
 import {
   Building2,
   Download,
@@ -12,7 +12,55 @@ import {
   X,
 } from "lucide-react";
 
-const CITY_COORDINATES = {
+type CoordinatePair = [number, number];
+
+type Building = {
+  rank: number;
+  name: string;
+  city: string;
+  country: string;
+  location: string;
+  completed: number;
+  heightM: number;
+  heightFt: number;
+  floors: number;
+  material: string;
+  function: string;
+  primaryFunction: string;
+  lat: number;
+  lon: number;
+  coordinatePrecision: "city";
+};
+
+type CityGroup = {
+  key: string;
+  city: string;
+  country: string;
+  location: string;
+  lat: number;
+  lon: number;
+  x: number;
+  y: number;
+  buildings: Building[];
+  tallest: Building;
+  count: number;
+};
+
+type FilterState = {
+  query: string;
+  country: string;
+  city: string;
+  material: string;
+  primaryFunction: string;
+  minHeight: number;
+  maxHeight: number;
+  minYear: number;
+  maxYear: number;
+};
+
+type BarRow = Record<string, string | number>;
+
+const CITY_COORDINATES: Record<string, CoordinatePair> = {
   "Abu Dhabi, United Arab Emirates": [24.4539, 54.3773],
   "Beijing, China": [39.9042, 116.4074],
   "Busan, South Korea": [35.1796, 129.0756],
@@ -159,13 +207,13 @@ const RAW_DATA = `rank|name|city|country|completed|heightM|heightFt|floors|mater
 99|Shenzhen Special Zone Press Tower|Shenzhen|China|1998|262|860|47|Composite|Office
 100|Ningbo Bank of China Headquarters|Ningbo|China|2020|246|807|49|Composite|Office`;
 
-function parseBuildings(rawText) {
+function parseBuildings(rawText: string): Building[] {
   const lines = rawText.trim().split("\n");
   return lines.slice(1).map((line) => {
     const columns = line.split("|");
     const [rank, name, city, country, completed, heightM, heightFt, floors, material, buildingFunction] = columns;
     const location = `${city}, ${country}`;
-    const coordinates = CITY_COORDINATES[location] ?? [0, 0];
+    const coordinates = location in CITY_COORDINATES ? CITY_COORDINATES[location] : ([0, 0] as CoordinatePair);
     return {
       rank: Number(rank),
       name,
@@ -194,12 +242,12 @@ const TILE_INDICES = Array.from({ length: Math.pow(2, TILE_ZOOM) }, (_, index) =
 
 const palette = ["#2563eb", "#7c3aed", "#ea580c", "#059669", "#dc2626", "#0891b2", "#db2777", "#475569", "#ca8a04", "#0f766e"];
 
-function colorForCountry(country, countries) {
+function colorForCountry(country: string, countries: string[]): string {
   const index = countries.indexOf(country);
   return palette[index % palette.length] ?? "#0f172a";
 }
 
-function projectMercator(lat, lon, zoom = TILE_ZOOM) {
+function projectMercator(lat: number, lon: number, zoom = TILE_ZOOM): { x: number; y: number } {
   const sinLatitude = Math.sin((lat * Math.PI) / 180);
   const scale = TILE_SIZE * Math.pow(2, zoom);
   const x = ((lon + 180) / 360) * scale;
@@ -207,8 +255,8 @@ function projectMercator(lat, lon, zoom = TILE_ZOOM) {
   return { x, y };
 }
 
-function groupByCity(rows) {
-  const groups = new Map();
+function groupByCity(rows: Building[]): CityGroup[] {
+  const groups = new Map<string, CityGroup>();
   rows.forEach((row) => {
     const key = row.location;
     if (!groups.has(key)) {
@@ -228,6 +276,7 @@ function groupByCity(rows) {
       });
     }
     const group = groups.get(key);
+    if (!group) return;
     group.buildings.push(row);
     group.count += 1;
     if (row.heightM > group.tallest.heightM) group.tallest = row;
@@ -235,20 +284,20 @@ function groupByCity(rows) {
   return Array.from(groups.values()).sort((a, b) => b.tallest.heightM - a.tallest.heightM);
 }
 
-function csvEscape(value) {
+function csvEscape(value: string | number | null | undefined): string {
   const stringValue = String(value ?? "");
   const needsEscaping = stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes('"');
   if (!needsEscaping) return stringValue;
   return `"${stringValue.split('"').join('""')}"`;
 }
 
-function toCsv(rows) {
+function toCsv(rows: Building[]): string {
   const headers = ["rank", "name", "city", "country", "completed", "heightM", "heightFt", "floors", "material", "function", "latitude", "longitude", "coordinatePrecision"];
   const csvRows = rows.map((row) => [row.rank, row.name, row.city, row.country, row.completed, row.heightM, row.heightFt, row.floors, row.material, row.function, row.lat, row.lon, row.coordinatePrecision].map(csvEscape).join(","));
   return [headers.join(","), ...csvRows].join("\n");
 }
 
-function downloadCsv(rows) {
+function downloadCsv(rows: Building[]): void {
   const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -276,7 +325,7 @@ function runTests() {
 
 runTests();
 
-function statCard(icon, label, value, detail) {
+function statCard(icon: ReactNode, label: string, value: string | number, detail: string): ReactElement {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-3">
@@ -291,18 +340,32 @@ function statCard(icon, label, value, detail) {
   );
 }
 
-function barList(rows, labelKey, valueKey, color = "#2563eb") {
-  const max = Math.max(...rows.map((row) => row[valueKey]), 1);
+function barList<T extends BarRow>(
+  rows: T[],
+  labelKey: keyof T,
+  valueKey: keyof T,
+  color = "#2563eb"
+): ReactElement {
+  const max = Math.max(
+    ...rows.map((row) => (typeof row[valueKey] === "number" ? row[valueKey] : Number(row[valueKey]))),
+    1
+  );
   return (
     <div className="space-y-3">
       {rows.map((row) => (
         <div key={row[labelKey]}>
           <div className="mb-1 flex justify-between gap-4 text-xs text-slate-600">
             <span className="truncate">{row[labelKey]}</span>
-            <span className="font-medium">{row[valueKey]}</span>
+            <span className="font-medium">{row[valueKey] as ReactNode}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full" style={{ width: `${(row[valueKey] / max) * 100}%`, backgroundColor: color }} />
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${((typeof row[valueKey] === "number" ? row[valueKey] : Number(row[valueKey])) / max) * 100}%`,
+                backgroundColor: color,
+              }}
+            />
           </div>
         </div>
       ))}
@@ -310,7 +373,14 @@ function barList(rows, labelKey, valueKey, color = "#2563eb") {
   );
 }
 
-function TileWorldMap({ cityGroups, countries, selectedGroup, onSelectLocation }) {
+type TileWorldMapProps = {
+  cityGroups: CityGroup[];
+  countries: string[];
+  selectedGroup: CityGroup | null;
+  onSelectLocation: (location: string) => void;
+};
+
+function TileWorldMap({ cityGroups, countries, selectedGroup, onSelectLocation }: TileWorldMapProps): ReactElement {
   return (
     <div className="relative h-[620px] overflow-hidden bg-slate-200">
       <div className="absolute left-1/2 top-1/2 h-[1024px] w-[1024px] -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-inner">
@@ -375,6 +445,7 @@ export default function BatchGeoReplacementMap() {
   const [minYear, setMinYear] = useState(1931);
   const [maxYear, setMaxYear] = useState(2023);
   const [selectedLocation, setSelectedLocation] = useState("Dubai, United Arab Emirates");
+  const filterState: FilterState = { query, country, city, material, primaryFunction, minHeight, maxHeight, minYear, maxYear };
 
   const countries = useMemo(() => Array.from(new Set(buildings.map((row) => row.country))).sort(), []);
   const countryOptions = useMemo(() => ["All", ...countries], [countries]);
@@ -386,12 +457,12 @@ export default function BatchGeoReplacementMap() {
   const functionOptions = useMemo(() => ["All", ...Array.from(new Set(buildings.map((row) => row.primaryFunction))).sort()], []);
 
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = filterState.query.trim().toLowerCase();
     return buildings.filter((row) => {
       const searchable = `${row.name} ${row.city} ${row.country} ${row.material} ${row.function}`.toLowerCase();
-      return (!normalized || searchable.includes(normalized)) && (country === "All" || row.country === country) && (city === "All" || row.city === city) && (material === "All" || row.material === material) && (primaryFunction === "All" || row.primaryFunction === primaryFunction) && row.heightM >= minHeight && row.heightM <= maxHeight && row.completed >= minYear && row.completed <= maxYear;
+      return (!normalized || searchable.includes(normalized)) && (filterState.country === "All" || row.country === filterState.country) && (filterState.city === "All" || row.city === filterState.city) && (filterState.material === "All" || row.material === filterState.material) && (filterState.primaryFunction === "All" || row.primaryFunction === filterState.primaryFunction) && row.heightM >= filterState.minHeight && row.heightM <= filterState.maxHeight && row.completed >= filterState.minYear && row.completed <= filterState.maxYear;
     });
-  }, [query, country, city, material, primaryFunction, minHeight, maxHeight, minYear, maxYear]);
+  }, [filterState]);
 
   const cityGroups = useMemo(() => groupByCity(filtered), [filtered]);
   const selectedGroup = cityGroups.find((group) => group.location === selectedLocation) ?? cityGroups[0] ?? null;
