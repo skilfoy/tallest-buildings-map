@@ -1,52 +1,28 @@
-import type { Building, DataEnvelope } from "./types";
+import type { Building } from "../types";
 
-const CACHE_KEY = "tallest-buildings-map:v2";
+const KEY = "tbm_cache_v1";
 const TTL_MS = 24 * 60 * 60 * 1000;
 
-type CachedPayload = {
-  fetchedAt: string;
-  buildings: Building[];
-};
+export type CachePayload = { savedAt: string; expiresAt: string; buildings: Building[] };
 
-export function readCachedBuildings(): DataEnvelope | null {
+export function saveCache(buildings: Building[]) {
+  const savedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
+  localStorage.setItem(KEY, JSON.stringify({ savedAt, expiresAt, buildings } satisfies CachePayload));
+  return expiresAt;
+}
+
+export function readCache(): { status: "missing" | "expired" | "invalid" | "available"; payload?: CachePayload } {
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return { status: "missing" };
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as CachedPayload;
-    const fetchedAtMs = Date.parse(parsed.fetchedAt);
-
-    if (!Number.isFinite(fetchedAtMs)) return null;
-    if (Date.now() - fetchedAtMs > TTL_MS) return null;
-    if (!Array.isArray(parsed.buildings)) return null;
-
-    return {
-      source: "cache",
-      fetchedAt: parsed.fetchedAt,
-      ttlHours: 24,
-      buildings: parsed.buildings.map((building) => ({
-        ...building,
-        source: "cache",
-      })),
-    };
+    const payload = JSON.parse(raw) as CachePayload;
+    if (!Array.isArray(payload.buildings) || !payload.expiresAt) return { status: "invalid" };
+    if (Date.parse(payload.expiresAt) < Date.now()) return { status: "expired", payload };
+    return { status: "available", payload };
   } catch {
-    return null;
+    return { status: "invalid" };
   }
 }
 
-export function writeCachedBuildings(buildings: Building[]): void {
-  try {
-    const payload: CachedPayload = {
-      fetchedAt: new Date().toISOString(),
-      buildings,
-    };
-
-    localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-  } catch {
-    // Browser storage can fail in private mode or under quota pressure.
-  }
-}
-
-export function clearBuildingCache(): void {
-  localStorage.removeItem(CACHE_KEY);
-}
+export function clearCache() { localStorage.removeItem(KEY); }
