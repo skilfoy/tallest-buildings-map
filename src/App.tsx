@@ -13,8 +13,9 @@ import { toFeatureCollection } from "./map/geojson";
 const defaultRows = parseRawData(RAW_DATA, "snapshot");
 
 async function fetchLiveData(): Promise<Building[]> {
-  const q = encodeURIComponent("SELECT ?item ?itemLabel WHERE {?item wdt:P31/wdt:P279* wd:Q41176. ?item wdt:P2048 ?h. FILTER(?h>200) SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }} LIMIT 120");
+  const q = encodeURIComponent("SELECT ?item ?itemLabel ?h WHERE {?item wdt:P31/wdt:P279* wd:Q41176. ?item wdt:P2048 ?h. FILTER(?h>200) SERVICE wikibase:label { bd:serviceParam wikibase:language 'en'. }} LIMIT 120");
   const res = await fetch(`https://query.wikidata.org/sparql?format=json&query=${q}`);
+  if (!res.ok) throw new Error(`Failed to fetch live data: ${res.status} ${res.statusText}`);
   const data = await res.json();
   return (data.results.bindings ?? []).slice(0, 50).map((b: any, i: number) => ({ ...defaultRows[i % defaultRows.length], id: b.item.value, name: b.itemLabel.value, heightM: Number(b.h?.value ?? defaultRows[i % defaultRows.length].heightM), recordSource: "live", sourceUrl: b.item.value }));
 }
