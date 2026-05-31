@@ -17,8 +17,18 @@ export function readCache(): { status: "missing" | "expired" | "invalid" | "avai
   if (!raw) return { status: "missing" };
   try {
     const payload = JSON.parse(raw) as CachePayload;
-    if (!Array.isArray(payload.buildings) || !payload.expiresAt) return { status: "invalid" };
-    if (Date.parse(payload.expiresAt) < Date.now()) return { status: "expired", payload };
+    if (
+      !Array.isArray(payload.buildings) ||
+      typeof payload.savedAt !== "string" ||
+      typeof payload.expiresAt !== "string"
+    ) {
+      return { status: "invalid" };
+    }
+
+    const savedAtMs = Date.parse(payload.savedAt);
+    const expiresAtMs = Date.parse(payload.expiresAt);
+    if (!Number.isFinite(savedAtMs) || !Number.isFinite(expiresAtMs)) return { status: "invalid" };
+    if (expiresAtMs < Date.now()) return { status: "expired", payload };
     return { status: "available", payload };
   } catch {
     return { status: "invalid" };
