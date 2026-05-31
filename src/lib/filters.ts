@@ -1,6 +1,14 @@
 import type { Building, Filters } from "../types";
 
 export function getBounds(rows: Building[]) {
+  if (!rows.length) {
+    return {
+      minHeight: 0,
+      maxHeight: 0,
+      minYear: 0,
+      maxYear: 0,
+    };
+  }
   return {
     minHeight: Math.min(...rows.map((r) => r.heightM)),
     maxHeight: Math.max(...rows.map((r) => r.heightM)),

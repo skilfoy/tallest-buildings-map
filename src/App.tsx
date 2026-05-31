@@ -32,10 +32,23 @@ export default function App() {
   useEffect(() => setFilters((f) => ({ ...f, ...bounds })), [bounds.minHeight, bounds.maxHeight, bounds.minYear, bounds.maxYear]);
 
   useEffect(() => {
-    fetch("./snapshot.json").then((r) => r.json()).then((rows: Building[]) => {
-      const tagged = rows.map((r) => ({ ...r, recordSource: "snapshot" as const }));
-      setState((s) => ({ ...s, activeBuildings: tagged, snapshotCount: tagged.length }));
-    }).catch(() => {});
+    fetch("./snapshot.json")
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Failed to load snapshot: ${r.status} ${r.statusText}`);
+        return r.json();
+      })
+      .then((rows: Building[]) => {
+        const tagged = rows.map((r) => ({ ...r, recordSource: "snapshot" as const }));
+        const result = validateBuildingDataset(tagged);
+        if (!result.ok) {
+          setState((s) => ({ ...s, snapshotError: result.errors.join(" | ") }));
+          return;
+        }
+        setState((s) => ({ ...s, activeBuildings: result.validRecords, snapshotCount: result.validRecords.length, snapshotError: undefined }));
+      })
+      .catch((e) => {
+        setState((s) => ({ ...s, snapshotError: String(e) }));
+      });
 
     const c = readCache();
     if (c.status === "available" && c.payload) {
@@ -100,6 +113,7 @@ export default function App() {
     <section className="grid md:grid-cols-4 gap-3 text-sm">
       <div className="p-3 bg-white rounded-xl">Active source: <b>{state.activeSource}</b></div><div className="p-3 bg-white rounded-xl">Active records: <b>{state.activeBuildings.length}</b></div><div className="p-3 bg-white rounded-xl">Cache: <b>{state.cacheStatus}</b> {state.cacheExpiresAt && `(${state.cacheExpiresAt})`}</div><div className="p-3 bg-white rounded-xl">Live: <b>{state.liveStatus}</b> {state.liveReturnedCount ? `(${state.liveValidCount}/${state.liveReturnedCount})` : ""}</div>
     </section>
+    {state.snapshotError && <div className="bg-amber-50 border border-amber-300 p-3 rounded-xl text-sm">{state.snapshotError}</div>}
     {(state.liveValidationErrors?.length ?? 0) > 0 && <div className="bg-amber-50 border border-amber-300 p-3 rounded-xl text-sm">{state.liveValidationErrors?.join(" | ")}</div>}
     <section className="grid md:grid-cols-6 gap-2 bg-white p-3 rounded-xl">
       <input className="border p-2 rounded" placeholder="Search" value={filters.query} onChange={(e)=>setFilters({...filters,query:e.target.value})}/>

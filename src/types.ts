@@ -36,6 +36,7 @@ export type DatasetState = {
   activeFetchedAt: string;
   activeBuildings: Building[];
   snapshotCount: number;
+  snapshotError?: string;
   cacheStatus: CacheStatus;
   liveStatus: LiveStatus;
   cacheExpiresAt?: string;
